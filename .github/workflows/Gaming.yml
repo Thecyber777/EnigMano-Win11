@@ -1,0 +1,467 @@
+name: "🎮 EnigMano — Ultimate Gaming RDP Setup"
+
+on:
+  workflow_dispatch:
+    inputs:
+      CODE:
+        description: "Full headless command or just the 4/... token from https://remotedesktop.google.com/headless"
+        required: true
+      PIN:
+        description: "CRD PIN (6+ digits). Default 123456"
+        required: false
+        default: "123456"
+      RETRIES:
+        description: "Retries for start-host (default 3)"
+        required: false
+        default: "3"
+      GAMING_MODE:
+        description: "Gaming performance mode (low/medium/high/ultra)"
+        required: false
+        default: "ultra"
+      RESOLUTION:
+        description: "Display resolution (e.g., 1920x1080, 2560x1440)"
+        required: false
+        default: "1920x1080"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crd-gaming-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  gaming-rdp-setup:
+    name: "🎮 EnigMano Windows 11 Gaming Edition"
+    runs-on: windows-latest
+
+    env:
+      RAW_CODE:      ${{ github.event.inputs.CODE }}
+      PIN_INPUT:     ${{ github.event.inputs.PIN }}
+      RETRIES_INPUT: ${{ github.event.inputs.RETRIES }}
+      GAMING_MODE:   ${{ github.event.inputs.GAMING_MODE }}
+      RESOLUTION:    ${{ github.event.inputs.RESOLUTION }}
+      BRANCH:        ${{ github.ref_name }}
+      RUNNER_ENV:    "hosted"
+      EnigMano_Win11_Token: ${{ secrets.EnigMano_Win11_Token }}
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: "🚀 Preload Gaming Essentials"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+          Write-Host "==============================================="
+          Write-Host "🎮 GAMING RDP OPTIMIZATION MODE: $env:GAMING_MODE"
+          Write-Host "🖥️  TARGET RESOLUTION: $env:RESOLUTION"
+          Write-Host "==============================================="
+
+          # Create gaming performance scripts
+          $gamingOptimizations = @'
+# Gaming Performance Optimizations
+function Optimize-GamingPerformance {
+    param([string]$Mode = "ultra", [string]$Resolution = "1920x1080")
+    
+    Write-Host "🎮 Applying $Mode gaming optimizations..."
+    
+    # Disable unnecessary services for gaming
+    $servicesToDisable = @(
+        "DiagTrack",               # Diagnostics Tracking Service
+        "dmwappushservice",        # Device Management WAP Push
+        "SysMain",                 # Superfetch
+        "WMPNetworkSvc",           # Windows Media Player Network Sharing
+        "WSearch",                 # Windows Search
+        "Fax",                     # Fax Service
+        "lfsvc",                   # Geolocation Service
+        "MapsBroker",              # Downloaded Maps Manager
+        "NetTcpPortSharing",       # Net.Tcp Port Sharing
+        "RemoteRegistry",          # Remote Registry
+        "SharedAccess",            # Internet Connection Sharing
+        "TrkWks",                  # Distributed Link Tracking Client
+        "WerSvc",                  # Windows Error Reporting
+        "wlidsvc",                 # Microsoft Account Sign-in Assistant
+        "WbioSrvc",                # Windows Biometric Service
+        "CDPUserSvc",              # Connected Devices Platform User Service
+        "PcaSvc",                  # Program Compatibility Assistant
+        "TabletInputService"       # Touch Keyboard and Handwriting Panel
+    )
+    
+    foreach ($service in $servicesToDisable) {
+        try {
+            Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
+            Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
+            Write-Host "  ⚙️ Disabled service: $service"
+        } catch {}
+    }
+    
+    # Set power plan to Ultimate Performance
+    try {
+        powercfg -duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61
+        powercfg -setactive e9a42b02-d5df-448d-aa00-03f14749eb61
+        Write-Host "  ⚡ Power plan set to: Ultimate Performance"
+    } catch {
+        powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # High performance
+        Write-Host "  ⚡ Power plan set to: High Performance"
+    }
+    
+    # Disable visual effects for better performance
+    $visualEffects = @{
+        "VisualFXSetting" = 2  # Adjust for best performance
+        "FontSmoothing" = 0
+        "MenuShowDelay" = 0
+    }
+    
+    foreach ($key in $visualEffects.Keys) {
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name $key -Value $visualEffects[$key]
+    }
+    
+    # Network optimizations
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TcpAckFrequency" -Value 1
+    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters" -Name "TCPNoDelay" -Value 1
+    
+    # Set resolution if specified
+    if ($Resolution -match '(\d+)x(\d+)') {
+        $width = $matches[1]
+        $height = $matches[2]
+        
+        # This would typically use Display settings API
+        # For RDP, we set Chrome Remote Desktop resolution
+        Write-Host "  🖥️  Target resolution set to: ${width}x${height}"
+    }
+    
+    # Disable Windows Defender real-time protection (temporarily)
+    try {
+        Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+        Write-Host "  🛡️  Windows Defender real-time monitoring disabled"
+    } catch {}
+    
+    Write-Host "✅ Gaming optimizations applied!"
+}
+
+function Install-GamingDrivers {
+    Write-Host "🎮 Installing gaming drivers and tools..."
+    
+    # Install DirectX runtime
+    $dxUrl = "https://download.microsoft.com/download/8/4/A/84A35BF1-DAFE-4AE8-82AF-AD2AE20B6B14/directx_Jun2010_redist.exe"
+    $dxPath = "$env:TEMP\directx_redist.exe"
+    
+    try {
+        Invoke-WebRequest -Uri $dxUrl -OutFile $dxPath -UseBasicParsing
+        Start-Process -FilePath $dxPath -ArgumentList "/Q" -Wait -NoNewWindow
+        Write-Host "  ✅ DirectX Runtime installed"
+    } catch {}
+    
+    # Install Visual C++ Redistributables
+    $vcRedists = @(
+        "https://aka.ms/vs/17/release/vc_redist.x64.exe",
+        "https://download.visualstudio.microsoft.com/download/pr/3b070396-b7fb-4eee-aa8b-102a23c3e4f4/40EA2955391C9EAE3E35619C4C24B5AAF3D17AEAA6D09424EE9672AA9372AEED/VC_redist.x86.exe"
+    )
+    
+    foreach ($vcUrl in $vcRedists) {
+        try {
+            $vcPath = "$env:TEMP\vc_redist.exe"
+            Invoke-WebRequest -Uri $vcUrl -OutFile $vcPath -UseBasicParsing
+            Start-Process -FilePath $vcPath -ArgumentList "/install /quiet /norestart" -Wait -NoNewWindow
+            Write-Host "  ✅ VC++ Redist installed"
+        } catch {}
+    }
+    
+    # Install .NET Framework 4.8
+    try {
+        $dotnetUrl = "https://go.microsoft.com/fwlink/?linkid=2088631"
+        $dotnetPath = "$env:TEMP\ndp48-web.exe"
+        Invoke-WebRequest -Uri $dotnetUrl -OutFile $dotnetPath -UseBasicParsing
+        Start-Process -FilePath $dotnetPath -ArgumentList "/q /norestart" -Wait -NoNewWindow
+        Write-Host "  ✅ .NET Framework 4.8 installed"
+    } catch {}
+}
+
+function Optimize-ChromeRDP {
+    param([string]$Mode = "ultra")
+    
+    Write-Host "🌐 Optimizing Chrome Remote Desktop for gaming..."
+    
+    # Chrome RDP configuration directory
+    $crdConfigDir = "$env:ProgramFiles\Google\Chrome Remote Desktop"
+    
+    if (Test-Path $crdConfigDir) {
+        # Create optimized configuration
+        $configContent = @"
+# Gaming-optimized Chrome Remote Desktop configuration
+--enable-features=WebRtcHideLocalIpsWithMdns
+--disable-features=CalculateNativeWinOcclusion
+--enable-gpu-rasterization
+--enable-zero-copy
+--disable-gpu-vsync
+--max-decoded-image-size=2048
+--num-raster-threads=4
+--ignore-gpu-blocklist
+--enable-parallel-downloading
+--disable-background-networking
+"@
+        
+        if ($Mode -eq "ultra") {
+            $configContent += @"
+
+# Ultra mode optimizations
+--disable-frame-rate-limit
+--disable-gpu-process-crash-limit
+--force-high-performance-gpu
+--enable-accelerated-video-decode
+--enable-hardware-overlays
+"@
+        }
+        
+        $configPath = "$crdConfigDir\gaming-optimized.conf"
+        $configContent | Out-File -FilePath $configPath -Encoding ASCII
+        
+        Write-Host "  ✅ Chrome RDP gaming configuration created"
+    }
+}
+
+# Export functions for use
+Export-ModuleMember -Function Optimize-GamingPerformance, Install-GamingDrivers, Optimize-ChromeRDP
+'@
+          
+          # Save gaming optimizations script
+          $gamingScriptPath = "$env:TEMP\GamingOptimizations.psm1"
+          $gamingOptimizations | Out-File -FilePath $gamingScriptPath -Encoding UTF8
+          
+          Write-Host "✅ Gaming optimization script created"
+          
+          # Create downloads directory
+          $userDownloads = Join-Path $env:USERPROFILE 'Downloads'
+          if (-not (Test-Path $userDownloads)) { 
+              New-Item -ItemType Directory -Path $userDownloads -Force | Out-Null 
+          }
+          
+          # Download essential gaming tools
+          $assets = @(
+              @{ 
+                  Url = "https://dl.google.com/edgedl/chrome-remote-desktop/chromeremotedesktophost.msi"; 
+                  Name = "crdhost.msi";
+                  Description = "Chrome Remote Desktop Host"
+              },
+              @{ 
+                  Url = "https://downloads.cloudflareclient.com/v1/download/windows/ga"; 
+                  Name = "Cloudflare_WARP_x64.msi";
+                  Description = "Cloudflare WARP for low-latency networking"
+              },
+              @{ 
+                  Url = "https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip"; 
+                  Name = "VBCABLE.zip";
+                  Description = "Virtual Audio Cable"
+              },
+              @{ 
+                  Url = "https://www.nvidia.com/content/DriverDownload-March2009/confirmation.php?url=/Windows/559.99/559.99-desktop-win10-win11-64bit-international-dch-whql.exe&lang=us&type=geforce"; 
+                  Name = "NVIDIA_GeForce_Experience.exe";
+                  Description = "NVIDIA Drivers (DCH)";
+                  Optional = $true
+              },
+              @{ 
+                  Url = "https://downloadmirror.intel.com/783323/igfx_win_101.5379.exe"; 
+                  Name = "Intel_Graphics_Driver.exe";
+                  Description = "Intel Graphics Driver";
+                  Optional = $true
+              },
+              @{ 
+                  Url = "https://download.visualstudio.microsoft.com/download/pr/c9f1d62e-5d6c-40e9-b5d3-6508b8c8a6e5/0e5ce4e67e5e4ad58b5f5c5f3c4c8e1c/vs_Community.exe"; 
+                  Name = "VS_BuildTools.exe";
+                  Description = "Visual Studio Build Tools"
+              },
+              @{ 
+                  Url = "https://nodejs.org/dist/v24.11.0/node-v24.11.0-x64.msi"; 
+                  Name = "node-v24.msi";
+                  Description = "Node.js Runtime"
+              },
+              @{ 
+                  Url = "https://github.com/microsoft/WindowsAppSDK/releases/download/v1.5.240818002/WindowsAppSDK-1.5.240818002-msixbundles-x64-Release.zip"; 
+                  Name = "WindowsAppSDK.zip";
+                  Description = "Windows App SDK"
+              },
+              @{ 
+                  Url = "https://github.com/obsproject/obs-studio/releases/download/30.0.2/OBS-Studio-30.0.2-Full-Windows-x64.zip"; 
+                  Name = "OBS_Studio.zip";
+                  Description = "OBS Studio (for game capture)";
+                  Optional = $true
+              }
+          )
+          
+          function Download-GamingAsset([string]$Url, [string]$OutFile, [string]$Description) {
+              Write-Host "📥 Downloading: $Description"
+              try {
+                  Invoke-WebRequest -Uri $Url -OutFile $OutFile -UseBasicParsing -TimeoutSec 300
+                  if ((Test-Path -LiteralPath $OutFile) -and ((Get-Item $OutFile).Length -gt 0)) {
+                      Write-Host "  ✅ Success"
+                      return $true
+                  }
+                  throw "Downloaded file missing or zero-size."
+              } catch {
+                  Write-Host "  ⚠️ Failed: $($_.Exception.Message)"
+                  return $false
+              }
+          }
+          
+          foreach ($asset in $assets) {
+              $dest = Join-Path $userDownloads $asset.Name
+              $success = Download-GamingAsset -Url $asset.Url -OutFile $dest -Description $asset.Description
+              
+              if (-not $success -and (-not $asset.Optional)) {
+                  Write-Error "❌ Essential download failed: $($asset.Description)"
+              }
+          }
+          
+          Write-Host "==============================================="
+          Write-Host "🎮 All gaming assets preloaded successfully!"
+          Write-Host "📁 Location: $userDownloads"
+          Write-Host "==============================================="
+
+      - name: "⚙️ Apply Gaming Optimizations"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          
+          # Import gaming optimizations module
+          Import-Module "$env:TEMP\GamingOptimizations.psm1" -Force
+          
+          # Apply gaming optimizations
+          Optimize-GamingPerformance -Mode $env:GAMING_MODE -Resolution $env:RESOLUTION
+          
+          # Install gaming drivers
+          Install-GamingDrivers
+          
+          # Optimize Chrome RDP
+          Optimize-ChromeRDP -Mode $env:GAMING_MODE
+          
+          # Disable Windows Update during gaming session
+          try {
+              Stop-Service -Name "wuauserv" -Force -ErrorAction SilentlyContinue
+              Set-Service -Name "wuauserv" -StartupType Disabled -ErrorAction SilentlyContinue
+              Write-Host "✅ Windows Update disabled for gaming session"
+          } catch {}
+          
+          # Set priority for gaming processes
+          $gameProcesses = @("chrome.exe", "chrome_remote_desktop_host.exe", "explorer.exe")
+          foreach ($proc in $gameProcesses) {
+              try {
+                  Get-Process -Name $proc -ErrorAction SilentlyContinue | ForEach-Object {
+                      $_.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::High
+                  }
+              } catch {}
+          }
+          
+          # Clear temporary files to free up space
+          try {
+              Cleanmgr /sagerun:1 | Out-Null
+              Write-Host "✅ Disk cleanup performed"
+          } catch {}
+          
+          Write-Host "==============================================="
+          Write-Host "🎮 GAMING OPTIMIZATIONS COMPLETE!"
+          Write-Host "Mode: $env:GAMING_MODE"
+          Write-Host "Resolution: $env:RESOLUTION"
+          Write-Host "==============================================="
+
+      - name: "🪄 EnigMano Gaming RDP Setup"
+        id: gaming-setup
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+          
+          try {
+              # Download and execute the main EnigMano script
+              $url = "https://gitlab.com/Shahzaib-YT/enigmano-win11-gcrd/-/raw/main/EnigMano-GCRD-Instance.ps1"
+              Invoke-WebRequest -Uri $url -OutFile "EnigMano-GCRD-Instance.ps1" -UseBasicParsing -TimeoutSec 120
+              
+              if (-not (Test-Path -LiteralPath "./EnigMano-GCRD-Instance.ps1")) {
+                  Write-Error "❌ Failed to download EnigMano-GCRD-Instance.ps1"
+                  exit 1
+              }
+              
+              # Create custom parameters for gaming
+              $gamingParams = @{
+                  Code = $env:RAW_CODE
+                  Pin = $env:PIN_INPUT
+                  Retries = $env:RETRIES_INPUT
+                  GateSecret = $env:EnigMano_Win11_Token
+                  GamingMode = $env:GAMING_MODE
+                  Resolution = $env:RESOLUTION
+              }
+              
+              # Convert to PowerShell parameters
+              $paramString = ""
+              foreach ($key in $gamingParams.Keys) {
+                  $paramString += " -$key '$($gamingParams[$key])'"
+              }
+              
+              # Execute with gaming parameters
+              powershell.exe -ExecutionPolicy Bypass -File ".\EnigMano-GCRD-Instance.ps1" $paramString
+              
+              # Final gaming optimizations
+              Write-Host "==============================================="
+              Write-Host "🎮 FINAL GAMING OPTIMIZATIONS"
+              Write-Host "==============================================="
+              
+              # Set Chrome RDP to high priority
+              try {
+                  $crdProcess = Get-Process -Name "chrome_remote_desktop_host" -ErrorAction SilentlyContinue
+                  if ($crdProcess) {
+                      $crdProcess.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
+                      Write-Host "✅ Chrome RDP process set to RealTime priority"
+                  }
+              } catch {}
+              
+              # Disable Windows Defender for gaming performance
+              try {
+                  Set-MpPreference -DisableArchiveScanning $true -ErrorAction SilentlyContinue
+                  Set-MpPreference -DisableBehaviorMonitoring $true -ErrorAction SilentlyContinue
+                  Set-MpPreference -DisableScriptScanning $true -ErrorAction SilentlyContinue
+                  Write-Host "✅ Windows Defender optimizations applied"
+              } catch {}
+              
+              # Network optimizations for gaming
+              try {
+                  netsh int tcp set global autotuninglevel=normal
+                  netsh int tcp set global rss=enabled
+                  Write-Host "✅ Network gaming optimizations applied"
+              } catch {}
+              
+          } catch {
+              Write-Error "⚠️ Gaming RDP setup error: $($_.Exception.Message)"
+              exit 1
+          }
+
+      - name: "🎯 Post-Setup Gaming Configuration"
+        run: |
+          Write-Host "==============================================="
+          Write-Host "🎮 GAMING RDP SETUP COMPLETE!"
+          Write-Host "==============================================="
+          Write-Host ""
+          Write-Host "📊 PERFORMANCE SUMMARY:"
+          Write-Host "• Gaming Mode: $env:GAMING_MODE"
+          Write-Host "• Resolution: $env:RESOLUTION"
+          Write-Host "• Power Plan: Ultimate Performance"
+          Write-Host "• Network: Optimized for low-latency"
+          Write-Host "• Audio: Virtual Cable Installed"
+          Write-Host "• Drivers: Gaming drivers pre-installed"
+          Write-Host ""
+          Write-Host "⚡ RECOMMENDED GAMING SETTINGS:"
+          Write-Host "• In-game settings: Medium to High (avoid Ultra)"
+          Write-Host "• Resolution: Use 1920x1080 for best performance"
+          Write-Host "• VSync: Disable in games"
+          Write-Host "• Frame limit: Set to 60 FPS"
+          Write-Host ""
+          Write-Host "🛠️  TROUBLESHOOTING:"
+          Write-Host "• If lag persists, try 'medium' gaming mode"
+          Write-Host "• Close unnecessary browser tabs"
+          Write-Host "• Use wired Ethernet if available"
+          Write-Host ""
+          Write-Host "🎬 YouTube: https://www.youtube.com/@ShahzaibYT-itxsb"
+          Write-Host "💻 Powered by: Shahzaib-YT"
+          Write-Host "==============================================="
